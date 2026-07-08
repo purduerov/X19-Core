@@ -36,7 +36,7 @@ class Publisher:
         
         :param proto_message: A compiled Protobuf message object
         """
-        payload = proto_message.SerializeoTString()
+        payload = proto_message.SerializeToString()
         # ZMQ PUB/SUB uses multipart: [topic_bytes, payload_bytes]
         self.socket.send_multipart([self.topic.encode('utf-8'), payload])
 
