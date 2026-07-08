@@ -9,13 +9,12 @@ This repository hosts the core communication, sensing, and control architecture 
 ```
 X19-Core/
 ├── config/                  # Configuration files (ports, address bindings)
-├── core/                    # Communication wrappers & middleware
+├── src/                    # Communication wrappers & middleware
 │   ├── cpp/                 # C++ wrapper library
-│   └── python/              # Python wrapper library (core.messaging package)
-│       └── core/
-│           └── messaging/
-│               ├── publisher.py
-│               └── subscriber.py
+│   └── python/              # Python wrapper library (python.messaging package)
+│       └── messaging/
+│           ├── publisher.py
+│           └── subscriber.py
 ├── nodes/                   # Independent executable nodes
 │   ├── cpp/                 # C++ nodes (thrusters, pid controls, etc.)
 │   └── python/              # Python nodes (video, pilot control, etc.)
@@ -44,7 +43,7 @@ Compile your `.proto` files in the `proto/` directory to generate C++ and Python
 ```bash
 ./scripts/compile_protos.sh
 ```
-This outputs compiled bindings directly to `core/protocols/cpp` and `core/protocols/python`.
+This outputs compiled bindings directly to `src/protocols/cpp` and `src/protocols/python`.
 
 ---
 
@@ -68,12 +67,12 @@ To make writing nodes simple and robust, lightweight wrappers wrap ZMQ sockets i
 
 ### Python API
 
-#### 1. Publisher (`core.messaging.Publisher`)
+#### 1. Publisher (`python.messaging.Publisher`)
 Creates a ZMQ `PUB` socket that serializes and publishes Protobuf messages on a specific topic.
 
 ```python
-from core.python.core.messaging import Publisher
-from core.protocols.python import telemetry_pb2
+from src.python.messaging import Publisher
+from src.protocols.python import telemetry_pb2
 
 # Initialize publisher (binds to address by default)
 publisher = Publisher(address="tcp://127.0.0.1:5555", topic="telemetry")
@@ -99,8 +98,8 @@ publisher.close()
 Creates a ZMQ `SUB` socket that connects to a publisher, subscribes to a topic, and parses incoming Protobuf payloads.
 
 ```python
-from core.python.core.messaging import Subscriber
-from core.protocols.python import telemetry_pb2
+from src.python.messaging import Subscriber
+from src.protocols.python import telemetry_pb2
 
 def telemetry_callback(data):
     print(f"Received depth: {data.depth}")
@@ -131,3 +130,16 @@ subscriber.close()
 *   `close()`
     *   Closes the underlying ZMQ socket.
 
+#### 3. Running The Code
+- set python path to dir root
+```bash
+export PYTHONPATH=<project_root>
+```
+- run publisher using virtual env first
+```bash
+./.venv/bin/python ./testing/hello_pub.py 
+```
+- run subscriber using virtual env next
+```bash
+./.venv/bin/python ./testing/hello_sub.py 
+```

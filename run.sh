@@ -29,4 +29,5 @@ fi
 
 # Run the hello_pub test script using the venv python and repository root in PYTHONPATH
 echo "=== Running hello_pub.py ==="
+export PYTHONPATH="$REPO_ROOT"
 PYTHONPATH="$REPO_ROOT" "$REPO_ROOT/.venv/bin/python" "$REPO_ROOT/testing/hello_pub.py"
