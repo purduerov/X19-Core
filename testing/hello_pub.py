@@ -1,5 +1,5 @@
-from core.python.core.messaging import Publisher, Subscriber
-from core.protocols.python import telemetry_pb2
+from src.python.messaging import Publisher, Subscriber
+from src.protocols.python import telemetry_pb2
 import time
 
 def test_pub_sub():
