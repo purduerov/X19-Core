@@ -143,3 +143,57 @@ export PYTHONPATH=<project_root>
 ```bash
 ./.venv/bin/python ./testing/hello_sub.py 
 ```
+
+---
+
+## 📹 Video Streaming & ZMQ IP Discovery
+
+`X19-Core` contains the camera acquisition and low-latency H.264 RTSP streaming pipeline for the ROV cameras.
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                   X19-Core Video Subsystem                       │
+│                                                                  │
+│  1. get_ip.py (ZMQ Subscriber on port 5556)                      │
+│     - Connects to tcp://<SURFACE_IP>:5556 on topic 'surface_ip'  │
+│     - Deserializes Protobuf payload: telemetry_pb2.test(msg=ip)  │
+│                                                                  │
+│  2. V4L2 Device Auto-Discovery                                   │
+│     - Runs 'v4l2-ctl --list-devices'                             │
+│     - Detects attached exploreHD / Arducam / Intel cameras       │
+│                                                                  │
+│  3. FFmpeg RTSP Streamers (videos_launch.py)                     │
+│     - Spawns background FFmpeg process for each camera           │
+│     - Encodes H.264 / MJPEG video with zerolatency preset        │
+│     - Pushes RTSP stream to rtsp://<SURFACE_IP>:8554/camera<N>   │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Video Nodes in `src/python/videos/`:
+- **[`get_ip.py`](file:///home/aditya/purdue/ROV/X-19/X19-Core/src/python/videos/get_ip.py)**: ZMQ subscriber node listening for Surface IP broadcast. Once IP is received, triggers camera discovery and starts streaming processes.
+- **[`videos_launch.py`](file:///home/aditya/purdue/ROV/X-19/X19-Core/src/python/videos/videos_launch.py)**: Low-latency FFmpeg RTSP camera streamer node (`--ip`, `--device`, `--camera-number`).
+- **[`cv_camera_connect.py`](file:///home/aditya/purdue/ROV/X-19/X19-Core/src/python/videos/cv_camera_connect.py)**: DepthAI camera RTSP streamer node for OAK/DepthAI hardware.
+
+---
+
+## 🌐 Network Ports & Field Deployment Guide
+
+When running on the Raspberry Pi connected to the Surface Topside Laptop via Ethernet/tether network:
+
+| Port | Protocol | Target Node | Purpose |
+|:---:|:---:|:---|:---|
+| **5555** | ZMQ (TCP) | Surface Telemetry | Receives telemetry packets on topic `telemetry` |
+| **5556** | ZMQ (TCP) | Surface IP Publisher | Receives Surface IP broadcast on topic `surface_ip` |
+| **8554** | RTSP (TCP) | Go2RTC Server | Pushes RTSP camera streams to Surface media server |
+
+### Running on Raspberry Pi (Hardware Network Setup):
+1. **On Surface Topside Laptop**: Start the `go2rtc_node.py` (or run `./launch --field`). Note the Surface laptop IP address (e.g. `192.168.1.100`).
+2. **On Raspberry Pi (`X19-Core`)**: Launch `get_ip.py` pointing to the Surface laptop's IP address:
+   ```bash
+   python3 src/python/videos/get_ip.py --surface-address tcp://192.168.1.100:5556
+   ```
+   Or export the environment variable:
+   ```bash
+   export SURFACE_ZMQ_ADDRESS="tcp://192.168.1.100:5556"
+   python3 src/python/videos/get_ip.py
+   ```
