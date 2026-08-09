@@ -74,13 +74,19 @@ def build_pipeline(fps, resolution):
     return pipeline
 
 
-def analyze_depth(frame, roi_frac):
+def analyze_depth(frame, roi_frac, intrinsics=None):
     """
     Summarize a depth frame (uint16 numpy, millimeters).
 
     Samples a central ROI so we report the distance to whatever is directly in
     front of the ROV rather than the whole scene. A value of 0 means the pixel
-    was invalid / unmatched. Returns (center_m, min_m, max_m, coverage).
+    was invalid / unmatched.
+
+    When camera intrinsics (fx, fy, cx, cy) are provided, the ROI center pixel is
+    back-projected to a 3D point in the camera frame: +x right, +y up, +z forward,
+    in meters (z is the ROI median depth). Without intrinsics, x/y/z are 0.
+
+    Returns (center_m, min_m, max_m, coverage, x_m, y_m, z_m).
     """
     h, w = frame.shape[:2]
     rh, rw = int(h * roi_frac), int(w * roi_frac)
@@ -89,13 +95,24 @@ def analyze_depth(frame, roi_frac):
 
     valid = roi[roi > 0]
     if valid.size == 0:
-        return 0.0, 0.0, 0.0, 0.0
+        return 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 
     center_m = float(np.median(valid)) / 1000.0
     min_m = float(valid.min()) / 1000.0
     max_m = float(valid.max()) / 1000.0
     coverage = float(valid.size) / float(roi.size)
-    return center_m, min_m, max_m, coverage
+
+    # Back-project the ROI center pixel using the pinhole model:
+    #   X = (u - cx) * Z / fx,  Y = (v - cy) * Z / fy
+    # v grows downward in image space, so negate Y to make +y up.
+    x_m = y_m = z_m = 0.0
+    if intrinsics is not None:
+        fx, fy, cx, cy = intrinsics
+        u, v = w / 2.0, h / 2.0  # ROI is centered on the image
+        z_m = center_m
+        x_m = (u - cx) * z_m / fx
+        y_m = -(v - cy) * z_m / fy
+    return center_m, min_m, max_m, coverage, x_m, y_m, z_m
 
 
 def main():
@@ -146,6 +163,11 @@ def main():
         depth_queue = device.getOutputQueue(name="depth", maxSize=4, blocking=False)
         print(" [Stereo Depth] Streaming depth. Press Ctrl+C to stop.", flush=True)
 
+        # Camera intrinsics for the depth-aligned socket (CAM_C), read once. Used
+        # to back-project the ROI center to X/Y/Z. Resolution is filled in on the
+        # first frame since intrinsics are resolution-dependent.
+        intrinsics = None
+
         while not quitEvent.is_set():
             in_depth = depth_queue.tryGet()
             if in_depth is None:
@@ -154,11 +176,25 @@ def main():
 
             frame = in_depth.getFrame()  # uint16 numpy, millimeters
             h, w = frame.shape[:2]
-            center_m, min_m, max_m, coverage = analyze_depth(frame, args.roi)
+
+            if intrinsics is None:
+                try:
+                    m = device.readCalibration().getCameraIntrinsics(
+                        dai.CameraBoardSocket.CAM_C, w, h
+                    )
+                    intrinsics = (m[0][0], m[1][1], m[0][2], m[1][2])  # fx, fy, cx, cy
+                except Exception as e:
+                    print(f" [Stereo Depth] Could not read intrinsics ({e}); X/Y/Z will be 0.", flush=True)
+                    intrinsics = ()  # sentinel: tried and failed, don't retry every frame
+
+            center_m, min_m, max_m, coverage, x_m, y_m, z_m = analyze_depth(
+                frame, args.roi, intrinsics or None
+            )
 
             print(
                 f" [Stereo Depth] center={center_m:.2f}m min={min_m:.2f}m "
-                f"max={max_m:.2f}m coverage={coverage * 100:.0f}%",
+                f"max={max_m:.2f}m coverage={coverage * 100:.0f}% "
+                f"xyz=({x_m:.2f}, {y_m:.2f}, {z_m:.2f})m",
                 flush=True,
             )
 
@@ -171,6 +207,9 @@ def main():
                     min_distance_m=min_m,
                     max_distance_m=max_m,
                     coverage=coverage,
+                    x_m=x_m,
+                    y_m=y_m,
+                    z_m=z_m,
                 )
                 publisher.publish(msg)
 
