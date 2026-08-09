@@ -102,6 +102,12 @@ def main():
     parser = argparse.ArgumentParser(
         description="OAK-D W Pro stereo depth analyzer + ZMQ publisher"
     )
+    # ZMQ port convention across the ROV nodes:
+    #   5555 -> telemetry  (SensorData: depth/temp, hello_pub.py)
+    #   5556 -> surface_ip (go2rtc IP handshake, go2rtc_node.py / get_ip.py)
+    #   5557 -> stereo     (this node; consumed by Surface stereo_subscriber_node.py)
+    # Keep this a distinct port so large-ish stereo results never contend with
+    # the control/telemetry sockets.
     parser.add_argument(
         "--publish-address",
         default=os.getenv("STEREO_ZMQ_ADDRESS", "tcp://*:5557"),
