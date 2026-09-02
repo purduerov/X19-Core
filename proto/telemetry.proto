@@ -43,11 +43,3 @@ message depthControlCommand {
   float k_i = 5;
   float k_d = 6;
 }
-
-// depth control, core->surface
-// this will only be sent once
-message depthControlData {
-  float k_p = 1; // default hard-coded weights
-  float k_i = 2;
-  float k_d = 3;
-}
