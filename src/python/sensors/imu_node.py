@@ -24,7 +24,7 @@ def build_pipeline(report_rate_hz: int) -> "dai.Pipeline":
     pipeline = dai.Pipeline()
 
     imu = pipeline.create(dai.node.IMU)
-    imu.enableIMUSensor(dai.IMUSensor.ACCELEROMETER_CALIBRATED, report_rate_hz)
+    imu.enableIMUSensor(dai.IMUSensor.ACCELEROMETER, report_rate_hz)
     imu.enableIMUSensor(dai.IMUSensor.GYROSCOPE_CALIBRATED, report_rate_hz)
     imu.enableIMUSensor(dai.IMUSensor.ROTATION_VECTOR, report_rate_hz)
     imu.setBatchReportThreshold(1)
