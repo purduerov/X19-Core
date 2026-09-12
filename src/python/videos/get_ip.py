@@ -23,7 +23,7 @@ class IpSubscriberNode:
     Subscribes to the surface_ip topic published by Surface go2rtc_node,
     extracts the surface IP address, and launches RTSP camera streaming subprocesses.
     """
-    def __init__(self, surface_address: str = "tcp://127.0.0.1:5556", topic: str = "surface_ip"):
+    def __init__(self, surface_address: str = "tcp://192.168.1.7", topic: str = "surface_ip"):
         self.surface_address = surface_address
         self.topic = topic
         self.cameras_launched = False
