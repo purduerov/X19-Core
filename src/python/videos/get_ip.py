@@ -116,8 +116,8 @@ def main():
     parser = argparse.ArgumentParser(description="ZMQ Surface IP Subscriber & Camera Launcher")
     parser.add_argument(
         "--surface-address",
-        default=os.getenv("SURFACE_ZMQ_ADDRESS", "tcp://127.0.0.1:5556"),
-        help="ZMQ Publisher address of Surface Go2RTC node (default: tcp://127.0.0.1:5556)"
+        default=os.getenv("SURFACE_ZMQ_ADDRESS", "tcp://192.168.1.7:5556"),
+        help="ZMQ Publisher address of Surface Go2RTC node (default: tcp://192.168.1.7:5556)"
     )
     args = parser.parse_args()
 
