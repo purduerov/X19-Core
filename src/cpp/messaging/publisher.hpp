@@ -4,6 +4,7 @@
 #include <string>
 #include <google/protobuf/message_lite.h>
 
+namespace CppMsg{
 
 template<typename MessageType>
 class Publisher{
@@ -15,7 +16,7 @@ class Publisher{
     zmq::socket_t socket;
     zmq::message_t topicMsg;
 public:
-    Publisher(const std::string &addressStr, const std::string &topicStr, bool bind = true) : 
+    Publisher(const std::string addressStr, const std::string topicStr, bool bind = true) : 
     address(std::move(addressStr)), topic(std::move(topicStr)){
         context = zmq::context_t(1);
         socket = zmq::socket_t(context, zmq::socket_type::sub);
@@ -28,19 +29,14 @@ public:
         zmq::message_t topic_msg(topic.data(), topic.size());
     }
     
-    // Serialze and publish protobuf message
     void publish(const MessageType &protoMessage){
-        // Serialize payload to a string
         std::string payload;
         protoMessage.SerializeToString(&payload);
 
-        // Encode the messages in the zmq format
         zmq::message_t payloadMsg(payload.data(), payload.size());
 
-        // Send topic message with sndmore flag
         socket.send(topicMsg, zmq::send_flags::sndmore);
 
-        // Send payload message with none flag
         socket.send(payloadMsg, zmq::send_flags::none);
     }
     void close(){
@@ -52,3 +48,4 @@ public:
     }
 };
 
+}

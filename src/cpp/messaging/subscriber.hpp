@@ -1,10 +1,14 @@
 #pragma once
+#include <thread>
 #include <zmq.h>
 #include <zmq.hpp>
 #include <string>
 #include <google/protobuf/message_lite.h>
 #include <chrono>
 
+namespace CppMsg{
+
+constexpr auto THREAD_SLEEP = std::chrono::milliseconds(10);
 
 template<typename MessageType>
 class Subscriber{
@@ -13,11 +17,13 @@ class Subscriber{
 
     using CallbackType = void(*)(const MessageType &);
 
+private:
     std::string address, topic;
     zmq::context_t context;
     zmq::socket_t socket;
     CallbackType callback;
-     
+    std::atomic<bool> keepRunning = true;
+    
 
 public:
     Subscriber(const std::string addressStr, const std::string topicStr, CallbackType callbackFn, bool bind = false) :
@@ -34,7 +40,7 @@ public:
 
     }
 
-    bool spinOnce(std::chrono::milliseconds timeout_ms){
+    bool spinOnce(std::chrono::milliseconds timeout_ms = std::chrono::milliseconds{10}){
         zmq::pollitem_t items[] = {
             { static_cast<void*>(socket), 0, ZMQ_POLLIN, 0 }
         };
@@ -44,16 +50,12 @@ public:
         if (items[0].revents & ZMQ_POLLIN) {
             try {
                 zmq::message_t topicMsg;
-                zmq::recv_result_t topicResult = socket.recv(topicMsg, zmq::recv_flags::none);
-
-                if (!topicResult || !topicMsg.more()) {
+                if (!socket.recv(topicMsg, zmq::recv_flags::none) || !topicMsg.more()) {
                     return false;
                 }
 
                 zmq::message_t payloadMsg;
-                zmq::recv_result_t payloadResult = socket.recv(payloadMsg, zmq::recv_flags::none);
-
-                if (!payloadResult) {
+                if (!socket.recv(payloadMsg, zmq::recv_flags::none)) {
                     return false;
                 }
 
@@ -71,4 +73,54 @@ public:
         }
         return false;
     }
+
+    void spin(){
+        while(true){
+            zmq::message_t topicMsg;
+            if (!socket.recv(topicMsg, zmq::recv_flags::none)) {
+                continue;
+            }
+
+            zmq::message_t payloadMsg;
+            if (!socket.recv(payloadMsg, zmq::recv_flags::none)) {
+                continue;
+            }
+
+            MessageType message;
+            if(message.ParseFromArray(payloadMsg.data(), payloadMsg.size())){
+                callback(message);
+            }
+        }
+    }
+
+    void spinThreaded(){
+        while(keepRunning){
+            zmq::message_t topicMsg;
+            if (!socket.recv(topicMsg, zmq::recv_flags::none)){
+                std::this_thread::sleep_for(std::chrono::milliseconds(THREAD_SLEEP));
+                continue;
+            }
+
+            zmq::message_t payloadMsg;
+            if (!socket.recv(payloadMsg, zmq::recv_flags::none)){
+                continue;
+            }
+
+            MessageType message;
+            if(message.ParseFromArray(payloadMsg.data(), payloadMsg.size())){
+                callback(message);
+            }
+        }
+    }
+
+    bool startSpinThreaded(){
+        std::thread subThread(this->spinThreaded());
+        return subThread.joinable();
+    }
+
+    void close(){
+        socket.close();
+    }
 };
+
+}
