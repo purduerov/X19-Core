@@ -1,4 +1,29 @@
 #!/usr/bin/env python3
+"""
+IMU publisher node for the OAK-D W Pro's onboard BNO086 IMU.
+
+Reads calibrated accelerometer, calibrated gyroscope, and the fused rotation
+vector (quaternion) off the camera's RVC2 processor via DepthAI, and
+publishes each sample as an ImuData protobuf message over ZMQ.
+
+Run (from the X19-Core repo root, with the venv's deps installed):
+    export PYTHONPATH=$(pwd)
+    .venv/bin/python src/python/sensors/imu_node.py [--address ADDR] [--topic TOPIC] [--rate-hz N]
+
+Dependencies:
+    - DepthAI v2.x (NOT v3 - v3 removed the dai.node.XLinkOut / getOutputQueue
+      API this file uses in favor of createOutputQueue(); this repo's other
+      DepthAI node, cv_camera_connect.py, is also written against v2):
+          pip install "depthai<3"
+      Docs: https://docs.luxonis.com/software/depthai-components/nodes/imu/
+      IMU example source: https://github.com/luxonis/depthai-python/tree/main/examples/IMU
+    - A udev rule so DepthAI can access the camera over USB without root
+      (one-time, per machine - see README's IMU Node section for the exact
+      rule and why a physical unplug/replug is required afterward).
+
+See the top-level README ("IMU Node" section) for full setup instructions,
+OAK-D configuration rationale, and port/topic reference.
+"""
 
 import sys
 import time
@@ -21,6 +46,26 @@ signal.signal(signal.SIGINT, lambda *_args: quitEvent.set())
 
 
 def build_pipeline(report_rate_hz: int) -> "dai.Pipeline":
+    """
+    Build the on-camera DepthAI graph: one IMU node emitting three report
+    types, linked to an XLinkOut so the host can read them over USB.
+
+    Sensor choices (BNO086, all calibrated/fused):
+      - ACCELEROMETER: calibrated linear acceleration, m/s^2.
+      - GYROSCOPE_CALIBRATED: calibrated angular velocity, rad/s.
+      - ROTATION_VECTOR: on-chip sensor-fused orientation quaternion, so
+        vertical stabilization gets a drift-corrected orientation instead of
+        one integrated from raw gyro data on the host.
+
+    Batching (setBatchReportThreshold/setMaxBatchReports) controls how many
+    samples get bundled into one XLink transfer before crossing USB:
+      - threshold=1: send as soon as a single report is ready (lowest
+        latency, more USB overhead) - the right tradeoff for a control-loop
+        input, favoring responsiveness over throughput.
+      - max=10: cap batch size in case the host falls behind reading.
+
+      
+    """
     pipeline = dai.Pipeline()
 
     imu = pipeline.create(dai.node.IMU)
@@ -38,6 +83,19 @@ def build_pipeline(report_rate_hz: int) -> "dai.Pipeline":
 
 
 def packet_to_proto(packet) -> "telemetry_pb2.ImuData":
+    """
+    Map one DepthAI IMUPacket to an ImuData protobuf message.
+
+    packet.acceleroMeter / .gyroscope / .rotationVector are DepthAI's own
+    report objects (not protobuf) - field names/spelling (e.g.
+    "acceleroMeter", quaternion components i/j/k/real) come straight from
+    the v2 API, confirmed against Luxonis's own examples:
+    https://github.com/luxonis/depthai-python/tree/main/examples/IMU
+
+    Uses the accelerometer report's *device* timestamp (getTimestampDevice),
+    not host arrival time, when the BNO086 actually captured the
+    sample, which matters for anything measuring rate or lag downstream.
+    """
     msg = telemetry_pb2.ImuData()
 
     accel = packet.acceleroMeter
@@ -62,6 +120,15 @@ def packet_to_proto(packet) -> "telemetry_pb2.ImuData":
 
 
 def main():
+    """
+    Entry point: build the pipeline, open the device, and publish every
+    IMU packet as it arrives until interrupted (SIGINT/SIGTERM).
+
+    Only one process can hold the DepthAI device open at a time - make sure
+    nothing else (e.g. cv_camera_connect.py) is running against the same
+    camera before starting this node, or dai.Device(pipeline) will fail.
+    
+    """
     parser = argparse.ArgumentParser(description="OAK-D W Pro IMU Publisher Node")
     parser.add_argument("--address", default="tcp://127.0.0.1:5557",
                          help="ZMQ address to bind the IMU publisher to")
