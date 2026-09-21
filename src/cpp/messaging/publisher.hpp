@@ -1,39 +1,33 @@
 #pragma once
-#include <type_traits>
 #include <zmq.hpp>
 #include <string>
 #include <google/protobuf/message_lite.h>
 
 namespace CppMsg{
 
-template<typename MessageType>
 class Publisher{
-    static_assert(std::is_base_of<google::protobuf::MessageLite, MessageType>::value, 
-        "MessageType must inherit from google::protobuf::MessageLite");
-
     std::string address, topic;
     zmq::context_t context;
     zmq::socket_t socket;
     zmq::message_t topicMsg;
 public:
-    Publisher(const std::string addressStr, const std::string topicStr, bool bind = true) : 
-    address(std::move(addressStr)), topic(std::move(topicStr)){
-        context = zmq::context_t(1);
-        socket = zmq::socket_t(context, zmq::socket_type::sub);
+    Publisher(std::string addressStr, std::string topicStr, bool bind = true) : 
+    address(std::move(addressStr)), topic(std::move(topicStr)), context(1), 
+    socket(context, zmq::socket_type::pub){
         if(bind){
             socket.bind(address);
         }else{
             socket.connect(address);
         }
-
-        zmq::message_t topic_msg(topic.data(), topic.size());
     }
     
-    void publish(const MessageType &protoMessage){
-        std::string payload;
-        protoMessage.SerializeToString(&payload);
+    void publish(const google::protobuf::MessageLite &protoMessage){
+        const size_t payloadSize = protoMessage.ByteSizeLong();
 
-        zmq::message_t payloadMsg(payload.data(), payload.size());
+        zmq::message_t topicMsg(topic.data(), topic.size());
+
+        zmq::message_t payloadMsg(payloadSize);
+        protoMessage.SerializeToArray(payloadMsg.data(), static_cast<int>(payloadSize));
 
         socket.send(topicMsg, zmq::send_flags::sndmore);
 
@@ -43,9 +37,12 @@ public:
         socket.close();
     }
 
-    ~Publisher(){
-        socket.close();
-    }
+    Publisher(const Publisher&) = delete;
+    Publisher& operator=(const Publisher&) = delete;
+    Publisher(Publisher&&) noexcept = default;
+    Publisher& operator=(Publisher&&) = default;
+
+    ~Publisher() = default;
 };
 
 }

@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <thread>
 #include <zmq.h>
 #include <zmq.hpp>
@@ -22,14 +23,13 @@ private:
     zmq::context_t context;
     zmq::socket_t socket;
     CallbackType callback;
-    std::atomic<bool> keepRunning = true;
+    std::atomic<bool> keepRunning = false;
+    std::thread workerThread;
     
-
 public:
-    Subscriber(const std::string addressStr, const std::string topicStr, CallbackType callbackFn, bool bind = false) :
-    address(std::move(addressStr)), topic(std::move(topicStr)), callback(callbackFn){
-        context = zmq::context_t(1);
-        socket = zmq::socket_t(context, zmq::socket_type::sub);
+    Subscriber(std::string addressStr, std::string topicStr, CallbackType callbackFn, bool bind = false) :
+    address(std::move(addressStr)), topic(std::move(topicStr)), callback(callbackFn),
+    context(1), socket(context, zmq::socket_type::sub){
         if(bind){
             socket.bind(address);
         }else{
@@ -37,15 +37,20 @@ public:
         }
 
         socket.set(zmq::sockopt::subscribe, topic);
-
+        socket.set(zmq::sockopt::rcvtimeo, 100);
     }
+
+    Subscriber(const Subscriber&) = delete;
+    Subscriber& operator=(const Subscriber) = delete;
+    Subscriber(Subscriber&&) = default;
+    Subscriber& operator=(Subscriber&&) = default;
 
     bool spinOnce(std::chrono::milliseconds timeout_ms = std::chrono::milliseconds{10}){
         zmq::pollitem_t items[] = {
             { static_cast<void*>(socket), 0, ZMQ_POLLIN, 0 }
         };
 
-        zmq::poll(&items[0], 1, std::chrono::milliseconds(timeout_ms));
+        zmq::poll(&items[0], 1, timeout_ms);
 
         if (items[0].revents & ZMQ_POLLIN) {
             try {
@@ -77,7 +82,7 @@ public:
     void spin(){
         while(true){
             zmq::message_t topicMsg;
-            if (!socket.recv(topicMsg, zmq::recv_flags::none)) {
+            if (!socket.recv(topicMsg, zmq::recv_flags::none) || !topicMsg.more()) {
                 continue;
             }
 
@@ -87,38 +92,51 @@ public:
             }
 
             MessageType message;
-            if(message.ParseFromArray(payloadMsg.data(), payloadMsg.size())){
+            if(message.ParseFromArray(payloadMsg.data(), static_cast<int>(payloadMsg.size()))){
                 callback(message);
             }
         }
     }
 
     void spinThreaded(){
-        while(keepRunning){
+        while(keepRunning.load(std::memory_order_relaxed)){
             zmq::message_t topicMsg;
-            if (!socket.recv(topicMsg, zmq::recv_flags::none)){
-                std::this_thread::sleep_for(std::chrono::milliseconds(THREAD_SLEEP));
+            if (!socket.recv(topicMsg, zmq::recv_flags::none) || !topicMsg.more()) {
                 continue;
             }
 
             zmq::message_t payloadMsg;
-            if (!socket.recv(payloadMsg, zmq::recv_flags::none)){
+            if (!socket.recv(payloadMsg, zmq::recv_flags::none)) {
                 continue;
             }
 
             MessageType message;
-            if(message.ParseFromArray(payloadMsg.data(), payloadMsg.size())){
+            if(message.ParseFromArray(payloadMsg.data(), static_cast<int>(payloadMsg.size()))){
                 callback(message);
             }
         }
     }
 
     bool startSpinThreaded(){
-        std::thread subThread(this->spinThreaded());
-        return subThread.joinable();
+        if(workerThread.joinable()){
+            return false;
+        }
+        keepRunning.store(true, std::memory_order_relaxed);
+        workerThread = std::thread(&Subscriber::spinThreaded(), this);
+        return workerThread.joinable();
+    }
+
+    bool stopSpinThreaded(){
+        keepRunning.store(false, std::memory_order_relaxed);
+        if(workerThread.joinable()){
+            workerThread.join();
+            return true;
+        }
+        return false;
     }
 
     void close(){
+        stopSpinThreaded();
         socket.close();
     }
 };
