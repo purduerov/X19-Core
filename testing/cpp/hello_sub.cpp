@@ -1,12 +1,21 @@
-#include <subscriber.hpp>
-#include <telemetry.pb.h>
 #include <iostream>
+#include <csignal>
+#include <chrono>
+#include "subscriber.hpp"
+#include "telemetry.pb.h"
 
-void callback(const rov::telemetry::test &msg){
-    std::cout << msg.msg() << "\n";
+
+void callback(const rov::telemetry::SensorData &data){
+    std::cout << "Received: " << data.depth() << "\n";
 }
 
 int main(){
-    auto sub = CppMsg::Subscriber<rov::telemetry::test>("tcp://*:5556", "test", callback);
+
+    std::cout << "Sub launched\n";
+    CppMsg::Subscriber<rov::telemetry::SensorData> sub("tcp://127.0.0.1:5555", "telemetry", callback);
+
     sub.spin();
+
+    std::cout << "Done spinning\n";
+    return 0;
 }
