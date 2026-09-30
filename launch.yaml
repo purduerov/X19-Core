@@ -1,0 +1,15 @@
+# ==============================================================================
+# ROV X-19 Core - Node Configuration
+# ==============================================================================
+# Define nodes to launch on the vehicle (Raspberry Pi).
+# To add more nodes in the future, add an entry under 'nodes'.
+
+nodes:
+  - name: "videos"
+    cmd: "python3 src/python/videos/get_ip.py"
+
+  # - name: "thrusters"
+  #   cmd: "python3 src/python/thrusters/thruster_node.py"
+
+  # - name: "telemetry"
+  #   cmd: "python3 src/python/sensors/telemetry_node.py"

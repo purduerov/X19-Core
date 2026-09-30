@@ -9,6 +9,8 @@ This repository hosts the core communication, sensing, and control architecture 
 ```
 X19-Core/
 ├── config/                  # Configuration files (ports, address bindings)
+├── launch.sh                # Bare-bones node launcher script (no tmux)
+├── launch.yaml              # Declarative node configuration
 ├── src/                    # Communication wrappers & middleware
 │   ├── cpp/                 # C++ wrapper library
 │   └── python/              # Python wrapper library (python.messaging package)
@@ -19,9 +21,12 @@ X19-Core/
 │   ├── cpp/                 # C++ nodes (thrusters, pid controls, etc.)
 │   └── python/              # Python nodes (video, pilot control, etc.)
 ├── proto/                   # Protobuf message schemas
-├── scripts/                 # Utility scripts (setup, compilation)
+├── scripts/                 # Utility scripts (setup, compilation, launch runner)
+│   ├── compile_protos.sh    # Protobuf schema compiler
+│   ├── launch.py            # Lightweight YAML process runner
+│   └── setup.sh             # System dependency provisioner
 ├── testing/                 # Validation and testing scripts
-├── run.sh                   # Main runner shortcut script
+├── run.sh                   # Test runner shortcut script
 └── MVPs.md                  # Development checklist & milestones
 ```
 
@@ -49,8 +54,40 @@ This outputs compiled bindings directly to `src/protocols/cpp` and `src/protocol
 
 ## 🚀 Running the Code
 
-Use the root [run.sh](file:///home/aditya/purdue/ROV/X-19/X19-Core/run.sh) script to execute your code with the correct python paths set:
+### 1. Multi-Node Launcher (`launch.sh` & `launch.yaml`)
+To launch all vehicle nodes on the Raspberry Pi without `tmux`:
 
+```bash
+# 1. Launch with default surface address (192.168.1.7:5556)
+./launch.sh
+
+# 2. Launch with a specific Surface laptop IP address
+./launch.sh -i 192.168.1.100
+
+# 3. View options
+./launch.sh --help
+```
+
+#### How the Launch Workflow Operates:
+1. **Dependency Verification**: [`launch.sh`](launch.sh) verifies that `python3` and `pyyaml` are installed. If missing, it alerts you with instructions to install them via `pip install -r requirements.txt`.
+2. **Environment & IP Setup**: Formats the Surface IP into `tcp://<IP>:5556` and exports `SURFACE_ZMQ_ADDRESS`.
+3. **Execution**: Hands off [`launch.yaml`](launch.yaml) to [`scripts/launch.py`](scripts/launch.py), which starts each defined node in the background and tags console logs with node labels (e.g. `[videos]`).
+4. **Graceful Cleanup**: Pressing `Ctrl+C` cleanly shuts down all nodes and terminates any spawned child processes (e.g., `ffmpeg` camera streams).
+
+#### Adding Future Nodes:
+To add new nodes (e.g. thrusters, telemetry), simply add their entry to [`launch.yaml`](launch.yaml):
+```yaml
+nodes:
+  - name: "videos"
+    cmd: "python3 src/python/videos/get_ip.py"
+
+  # Future nodes:
+  - name: "thrusters"
+    cmd: "python3 src/python/thrusters/thruster_node.py"
+```
+
+### 2. Standalone Test Scripts (`run.sh`)
+Use the root [run.sh](file:///home/aditya/purdue/ROV/X-19/X19-Core/run.sh) script to execute standalone test scripts:
 ```bash
 # Run the hello_pub test node
 ./run.sh
@@ -187,13 +224,9 @@ When running on the Raspberry Pi connected to the Surface Topside Laptop via Eth
 | **8554** | RTSP (TCP) | Go2RTC Server | Pushes RTSP camera streams to Surface media server |
 
 ### Running on Raspberry Pi (Hardware Network Setup):
-1. **On Surface Topside Laptop**: Start the `go2rtc_node.py` (or run `./launch --field`). Note the Surface laptop IP address (e.g. `192.168.1.100`).
-2. **On Raspberry Pi (`X19-Core`)**: Launch `get_ip.py` pointing to the Surface laptop's IP address:
+1. **On Surface Topside Laptop**: Start `go2rtc_node.py` (or run `./launch --field` in `X19-Surface`). Note the Surface laptop IP address (e.g. `192.168.1.100`).
+2. **On Raspberry Pi (`X19-Core`)**: Launch all vehicle nodes pointing to the Surface laptop's IP address:
    ```bash
-   python3 src/python/videos/get_ip.py --surface-address tcp://192.168.1.100:5556
+   ./launch.sh -i 192.168.1.100
    ```
-   Or export the environment variable:
-   ```bash
-   export SURFACE_ZMQ_ADDRESS="tcp://192.168.1.100:5556"
-   python3 src/python/videos/get_ip.py
-   ```
+   *(This automatically forwards the Surface address to `get_ip.py`, discovers local cameras, and streams RTSP video back to the Surface computer).*
