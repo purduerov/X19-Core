@@ -4,16 +4,30 @@
 #include <zmq.hpp>
 #include <google/protobuf/message_lite.h>
 
-namespace CppMsg{
+/**
+ * @namespace CppMsg
+ * @brief Messaging utilities wrapping ZeroMQ and Google Protocol Buffers.
+ */
+namespace CppMsg {
 
-class Publisher{
+/**
+ * @class Publisher
+ * @brief Publishes serialized Protocol Buffer messages over a ZeroMQ PUB socket.
+ */
+class Publisher {
 private:
-    std::string address;
-    std::string topic;
-    zmq::context_t context;
-    zmq::socket_t socket;
+    std::string address;    ///< ZeroMQ endpoint address.
+    std::string topic;      ///< Message topic prefix.
+    zmq::context_t context; ///< ZeroMQ context instance.
+    zmq::socket_t socket;   ///< Underlying ZeroMQ PUB socket.
 
 public:
+    /**
+     * @brief Constructs a Publisher and sets up the underlying socket.
+     * @param addressStr Endpoint address string (e.g., "tcp://*:5555").
+     * @param topicStr Topic string prefixed to outgoing messages.
+     * @param bind True to bind the socket; false to connect.
+     */
     Publisher(std::string addressStr, std::string topicStr, bool bind = true) :
         address(std::move(addressStr)),
         topic(std::move(topicStr)),
@@ -26,15 +40,28 @@ public:
         }
     }
 
+    /// Deleted copy constructor.
     Publisher(const Publisher&) = delete;
+    /// Deleted copy assignment operator.
     Publisher& operator=(const Publisher&) = delete;
+
+    /// Default move constructor.
     Publisher(Publisher&&) noexcept = default;
+    /// Default move assignment operator.
     Publisher& operator=(Publisher&&) noexcept = default;
 
+    /**
+     * @brief Destructor. Closes the socket connection.
+     */
     ~Publisher() {
         close();
     }
 
+    /**
+     * @brief Serializes and publishes a Protocol Buffer message.
+     * @param protoMessage Protobuf message instance to serialize and send.
+     * @return True if both topic frame and payload were sent successfully; false otherwise.
+     */
     bool publish(const google::protobuf::MessageLite &protoMessage) {
         const size_t payloadSize = protoMessage.ByteSizeLong();
 
@@ -52,6 +79,9 @@ public:
         return res2.has_value();
     }
 
+    /**
+     * @brief Closes the ZeroMQ socket if currently active.
+     */
     void close() {
         if (static_cast<bool>(socket)) {
             socket.close();
