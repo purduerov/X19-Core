@@ -102,6 +102,89 @@ Use the root [run.sh](file:///home/aditya/purdue/ROV/X-19/X19-Core/run.sh) scrip
 
 To make writing nodes simple and robust, lightweight wrappers wrap ZMQ sockets into easy-to-use classes.
 
+### C++ API
+
+The C++ wrappers reside in the `CppMsg` namespace and provide RAII-compliant management of ZeroMQ sockets and Protobuf serialization.
+
+#### 1. Publisher (`CppMsg::Publisher`)
+Creates a ZMQ `PUB` socket that serializes and publishes Protobuf messages on a specific topic.
+
+```cpp
+#include "src/cpp/messaging/publisher.hpp"
+#include "src/protocols/cpp/telemetry.pb.h"
+
+// Initialize publisher (binds to address by default)
+CppMsg::Publisher publisher("tcp://127.0.0.1:5555", "telemetry", /*bind=*/true);
+
+// Create and publish a Protobuf message
+telemetry::SensorData msg;
+msg.set_depth(1.24);
+bool success = publisher.publish(msg);
+
+// Clean up (also automatically closed via destructor)
+publisher.close();
+```
+
+*   `Publisher(std::string addressStr, std::string topicStr, bool bind = true)`
+    *   `addressStr`: ZMQ endpoint address (e.g., `tcp://*:5555`).
+    *   `topicStr`: Topic string prefixed as the first multipart frame.
+    *   `bind`: Binds the socket if `true`; connects if `false`.
+*   `publish(const google::protobuf::MessageLite &protoMessage) -> bool`
+    *   Serializes any message derived from `MessageLite` and publishes it in a two-part frame (`[topic, payload]`). Returns `true` if successful.
+*   `close() -> void`
+    *   Closes the underlying ZeroMQ socket.
+
+#### 2. Subscriber (`CppMsg::Subscriber<MessageType>`)
+A templated subscriber class that manages a ZMQ `SUB` socket, subscribes to a topic filter, and deserializes incoming Protobuf frames to invoke a user-defined callback.
+
+```cpp
+#include <iostream>
+#include <chrono>
+#include "src/cpp/messaging/subscriber.hpp"
+#include "src/protocols/cpp/telemetry.pb.h"
+
+void telemetry_callback(const telemetry::SensorData &data) {
+    std::cout << "Received depth: " << data.depth() << std::endl;
+}
+
+// Initialize subscriber (connects to address by default)
+CppMsg::Subscriber<telemetry::SensorData> subscriber(
+    "tcp://127.0.0.1:5555",
+    "telemetry",
+    telemetry_callback,
+    /*bind=*/false
+);
+
+// Option A: Single non-blocking / timed poll
+subscriber.spinOnce(std::chrono::milliseconds(100));
+
+// Option B: Asynchronous reception in a dedicated worker thread
+subscriber.startSpinThreaded();
+// ... execute work ...
+subscriber.stopSpinThreaded();
+
+// Clean up (also automatically closed via destructor)
+subscriber.close();
+```
+
+*   `Subscriber(std::string addressStr, std::string topicStr, CallbackType callbackFn, bool bind = false)`
+    *   `addressStr`: Target publisher endpoint (e.g., `tcp://127.0.0.1:5555`).
+    *   `topicStr`: Topic prefix filter to subscribe to.
+    *   `callbackFn`: Callback signature matching `std::function<void(const MessageType &)>`.
+    *   `bind`: Binds socket if `true`; connects if `false`.
+*   `spinOnce(std::chrono::milliseconds timeout_ms = 10ms) -> bool`
+    *   Polls the socket for incoming frames within the given timeout. Parses the payload, executes the callback, and drains any remaining frames. Returns `true` if a message was handled.
+*   `spin() -> void`
+    *   Enters a continuous blocking receive loop on the calling thread.
+*   `startSpinThreaded() -> bool`
+    *   Spawns a background thread running `spinThreaded()`. Returns `true` if started.
+*   `stopSpinThreaded() -> bool`
+    *   Signals the worker thread to stop and joins it. Returns `true` if joined.
+*   `close() -> void`
+    *   Stops any active background thread and closes the underlying ZeroMQ socket.
+
+---
+
 ### Python API
 
 #### 1. Publisher (`python.messaging.Publisher`)
