@@ -24,3 +24,23 @@ double Controller::compute(double measurement, double dt) {
 
   return output;
 }
+
+void queue_measurement(double measurement, float* data, int position) {
+}
+
+double Controller::filter_data(double measurement) {
+  // enqueue measurement
+  moving_avg[mov_avg_index] = measurement;
+  mov_avg_index++; mov_avg_index %= 10;
+  num_items = (num_items + 1 > 9) ? 9 : num_items + 1; 
+
+  // take average value
+  double sum = 0;
+  for (int i = 0; i < num_items; i++) {
+    sum += moving_avg[i];
+  }
+  return sum / (double)num_items;
+}
+
+
+
