@@ -25,20 +25,15 @@ def main():
             command = [
                 "ffmpeg",
                 "-f", "v4l2",
+                "-input_format", "h264",
                 "-video_size", "640x480",
-                "-input_format", "mjpeg",
+                "-framerate", "30",
                 "-i", f"{dev_name}",
-                "-c:v", "libx264",
-                "-preset", "ultrafast",
-                "-tune", "zerolatency",
-                "-pix_fmt", "yuv420p",
-                "-g", "1",
-                "-fflags", "nobuffer",
-                "-flags", "low_delay",
-                "-probesize", "32",
-                "-analyzeduration", "0",
-                "-rtsp_transport", "tcp",
+               # "-fflags", "nobuffer",
+                "-codec:v", "copy",
                 "-f", "rtsp",
+               # "-g", "10",
+                "-rtsp_transport", "tcp",
                 rtsp_url
             ]
 
