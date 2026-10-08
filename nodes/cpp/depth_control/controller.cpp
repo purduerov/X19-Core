@@ -1,5 +1,7 @@
 #include "controller.hpp"
 
+#define MAX(a, b)
+
 double Controller::compute(double measurement, double dt) {
   double error = target - measurement;
   double p = weights.k_p;
@@ -25,22 +27,15 @@ double Controller::compute(double measurement, double dt) {
   return output;
 }
 
-void queue_measurement(double measurement, float* data, int position) {
+double Controller::compute_filtered(double dt) {
+  return this->compute(moving_avg, dt);
 }
 
-double Controller::filter_data(double measurement) {
-  // enqueue measurement
-  moving_avg[mov_avg_index] = measurement;
-  mov_avg_index++; mov_avg_index %= 10;
-  num_items = (num_items + 1 > 9) ? 9 : num_items + 1; 
-
-  // take average value
-  double sum = 0;
-  for (int i = 0; i < num_items; i++) {
-    sum += moving_avg[i];
-  }
-  return sum / (double)num_items;
+void Controller::record_measurement(double measurement) {
+  // s_t     = \alpha    * x_t         + (1 - \alpha)    * s_{t-1}
+  moving_avg = EMA_Alpha * measurement + (1 - EMA_Alpha) * moving_avg;
 }
 
-
-
+double Controller::get_measurement() {
+  return moving_avg;
+}
