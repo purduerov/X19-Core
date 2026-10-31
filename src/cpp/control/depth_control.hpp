@@ -11,7 +11,7 @@ typedef struct {
   double k_d;
 } Weights;
 
-class Controller {
+class DepthControl {
 public:
   // pid weights
   Weights weights;
@@ -28,7 +28,7 @@ public:
 
   int num_items = 0;
 
-  Controller(Weights w) : weights(w) {};
+  DepthControl(Weights w) : weights(w) {};
   double compute(double measurement, double dt);
   double compute_filtered(double dt);
   void record_measurement(double measurement);

@@ -1,10 +1,10 @@
-#include "controller.hpp"
+#include "depth_control.hpp"
 
 #define MAX(a, b)
 
-double Controller::compute(double measurement, double dt) {
+double DepthControl::compute(double measurement, double dt) {
   double error = target - measurement;
-  double p = weights.k_p;
+  double p = weights.k_p * error;
 
   integral += error * dt;
   double i = weights.k_i * integral;
@@ -27,15 +27,15 @@ double Controller::compute(double measurement, double dt) {
   return output;
 }
 
-double Controller::compute_filtered(double dt) {
+double DepthControl::compute_filtered(double dt) {
   return this->compute(moving_avg, dt);
 }
 
-void Controller::record_measurement(double measurement) {
+void DepthControl::record_measurement(double measurement) {
   // s_t     = \alpha    * x_t         + (1 - \alpha)    * s_{t-1}
   moving_avg = EMA_Alpha * measurement + (1 - EMA_Alpha) * moving_avg;
 }
 
-double Controller::get_measurement() {
+double DepthControl::get_measurement() {
   return moving_avg;
 }
