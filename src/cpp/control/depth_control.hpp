@@ -22,9 +22,12 @@ public:
   // pid values
   double integral = 0;
   double last_error = 0;
+  bool has_last_error = false; // false -> no derivative on the first sample
+  double last_output = 0;
 
   // exponential moving average filter
   double moving_avg = 0;
+  bool has_measurement = false; // false until the first sample seeds the filter
 
   int num_items = 0;
 
@@ -33,4 +36,8 @@ public:
   double compute_filtered(double dt);
   void record_measurement(double measurement);
   double get_measurement();
+
+  // clear integral + derivative history (call whenever the target jumps)
+  void reset();
+  bool ready() const { return has_measurement; }
 };

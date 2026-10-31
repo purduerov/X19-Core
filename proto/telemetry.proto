@@ -9,6 +9,14 @@ message Vector3D {
   float z = 3;
 }
 
+// Unit quaternion (w + xi + yj + zk)
+message Quaternion {
+  float w = 1;
+  float x = 2;
+  float y = 3;
+  float z = 4;
+}
+
 // Telemetry from the ROV sensors to the topside
 message SensorData {
   uint64 timestamp_us = 1;
@@ -16,6 +24,7 @@ message SensorData {
   Vector3D angular_velocity = 3;   // rad/s
   float depth = 4;                 // meters (calculated from pressure)
   float temperature = 5;           // Celsius
+  Quaternion orientation = 6;      // vehicle pose, local -> world (absent = assume level)
 }
 
 // testing message
@@ -39,6 +48,15 @@ message ControllerCommand {
   float roll = 4;
   float pitch = 5;
   float yaw = 6;
-  bool enable_depth_control = 7;
-  float target_depth = 8;
+  bool enable_depth_control = 7;  // master switch for depth hold
+  float target_depth = 8;         // unused by the hold logic (target is latched onboard)
+  bool depth_override = 9;        // true while the pilot holds the "free depth" button
+}
+
+// Final output of the control node: a rigid transform (position + rotation)
+// sent to the thruster mapping
+message ThrusterCommand {
+  uint64 timestamp_us = 1;
+  Vector3D translation = 2;  // local frame, vertical already replaced by depth hold when active
+  Quaternion rotation = 3;
 }

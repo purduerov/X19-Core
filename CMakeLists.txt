@@ -16,10 +16,22 @@ add_library(protocols_lib ${PROTO_SRCS} ${PROTO_HDRS})
 target_include_directories(protocols_lib PUBLIC "${CMAKE_CURRENT_BINARY_DIR}")
 target_link_libraries(protocols_lib PUBLIC protobuf::libprotobuf)
 
-file(GLOB_RECURSE MESSAGING_SOURCES "src/cpp/*.cpp" "src/cpp/*.hpp")
-add_library(messaging_lib ${MESSAGING_SOURCES})
-target_include_directories(messaging_lib PUBLIC "src/cpp" "src/cpp/messaging")
-target_link_libraries(messaging_lib PUBLIC cppzmq protocols_lib Eigen3::Eigen)
+# messaging wrappers are header-only
+add_library(messaging_lib INTERFACE)
+target_include_directories(messaging_lib INTERFACE "src/cpp" "src/cpp/messaging")
+target_link_libraries(messaging_lib INTERFACE cppzmq protocols_lib Eigen3::Eigen)
+
+# everything under src/cpp/control/ builds into one program (control);
+# control.cpp holds main(), the rest goes in control_lib so the tests can link it too
+file(GLOB CONTROL_SOURCES "src/cpp/control/*.cpp")
+set(CONTROL_MAIN "${CMAKE_CURRENT_SOURCE_DIR}/src/cpp/control/control.cpp")
+list(REMOVE_ITEM CONTROL_SOURCES ${CONTROL_MAIN})
+add_library(control_lib ${CONTROL_SOURCES})
+target_include_directories(control_lib PUBLIC "src/cpp")
+target_link_libraries(control_lib PUBLIC Eigen3::Eigen)
+
+add_executable(control ${CONTROL_MAIN})
+target_link_libraries(control PRIVATE control_lib messaging_lib protocols_lib cppzmq)
 
 enable_testing()
 file(GLOB TEST_SOURCES "testing/cpp/*.cpp")
@@ -28,7 +40,6 @@ foreach(TEST_SOURCE ${TEST_SOURCES})
     get_filename_component(TEST_NAME ${TEST_SOURCE} NAME_WE)
     add_executable(${TEST_NAME} ${TEST_SOURCE})
     target_include_directories(${TEST_NAME} PRIVATE "testing/cpp")
-    target_link_libraries(${TEST_NAME} PRIVATE messaging_lib protocols_lib cppzmq)
+    target_link_libraries(${TEST_NAME} PRIVATE messaging_lib control_lib protocols_lib cppzmq)
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
 endforeach()
-
