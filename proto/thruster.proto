@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package rov.thruster;
+
+// Axis order is X, Y, Z, roll, pitch, yaw. Exactly six finite values required.
+message ThrustCommand {
+  repeated double desired_thrust = 1;
+  // 0=fine, 1=standard, 2=yeet, 3=megayeet. Absent defaults to fine.
+  uint32 power_mode = 2;
+}
+
+// Signed input allows the controller to clamp each value to [0, 255].
+message ToolsCommand {
+  repeated sint32 tools = 1;
+}
+
+message FinalThrust {
+  // Exactly six PWM counts in the mapping's thruster order; neutral is 127.
+  repeated uint32 thrusters = 1;
+}
+
+message ToolsMotor {
+  repeated uint32 tools = 1;
+}

@@ -24,7 +24,7 @@ private:
 public:
     /**
      * @brief Constructs a Publisher and sets up the underlying socket.
-     * @param addressStr Endpoint address string (e.g., "tcp://*:5555").
+     * @param addressStr Endpoint address string (e.g., "tcp://127.0.0.1:5555").
      * @param topicStr Topic string prefixed to outgoing messages.
      * @param bind True to bind the socket; false to connect.
      */

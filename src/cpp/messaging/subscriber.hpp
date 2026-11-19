@@ -60,9 +60,9 @@ public:
     Subscriber(std::string addressStr, std::string topicStr, CallbackType callbackFn, bool bind = false) :
         address(std::move(addressStr)),
         topic(std::move(topicStr)),
-        callback(std::move(callbackFn)),
         context(1),
-        socket(context, zmq::socket_type::sub) {
+        socket(context, zmq::socket_type::sub),
+        callback(std::move(callbackFn)) {
         if (bind) {
             socket.bind(address);
         } else {
@@ -92,6 +92,7 @@ public:
     /**
      * @brief Polls the socket once for incoming messages within the given timeout.
      * @param timeout_ms Poll timeout duration in milliseconds. Defaults to 10 ms.
+     * Requires an exact topic match and exactly two frames (topic, payload).
      * @return True if a message was successfully received and dispatched; false otherwise.
      */
     bool spinOnce(std::chrono::milliseconds timeout_ms = std::chrono::milliseconds{10}) {
@@ -111,6 +112,11 @@ public:
                     return false;
                 }
 
+                if (topicMsg.to_string() != topic) {
+                    drainMultipart();
+                    return false;
+                }
+
                 zmq::message_t payloadMsg;
                 if (!socket.recv(payloadMsg, zmq::recv_flags::none)) {
                     drainMultipart();
@@ -119,6 +125,7 @@ public:
 
                 if (payloadMsg.more()) {
                     drainMultipart();
+                    return false;
                 }
 
                 MessageType message;
